@@ -1,0 +1,19 @@
+from typing import Protocol
+
+from rag.domain.entities import Chunk, SearchResult
+
+
+class EmbeddingStrategy(Protocol):
+    """Strategy Pattern: qualquer provedor de embeddings expõe só este método único."""
+
+    def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+    @property
+    def dimension(self) -> int: ...
+
+
+class VectorStore(Protocol):
+    def add(self, chunks: list[Chunk], vectors: list[list[float]]) -> None: ...
+    def search(self, query_vector: list[float], k: int) -> list[SearchResult]: ...
+    def save(self) -> None: ...
+    def load(self) -> bool: ...
