@@ -23,10 +23,12 @@ async def test_create_and_get_book(client: AsyncClient) -> None:
     assert create_response.status_code == 201
     body = create_response.json()
     assert body["available_copies"] == 3
+    assert body["author_name"] == "Robert C. Martin"
 
     get_response = await client.get(f"/api/v1/books/{body['id']}")
     assert get_response.status_code == 200
     assert get_response.json()["title"] == "Clean Code"
+    assert get_response.json()["author_name"] == "Robert C. Martin"
 
 
 async def test_create_book_with_duplicate_isbn_returns_409(client: AsyncClient) -> None:

@@ -1,12 +1,30 @@
 from fastapi import APIRouter, status
 
-from library_api.lending.api.deps import LoanServiceDep, MemberServiceDep
+from library_api.catalog.service_layer.services import BookService
+from library_api.lending.api.deps import BookServiceDep, LoanServiceDep, MemberServiceDep
 from library_api.lending.api.schemas import LoanCreate, LoanRead, MemberCreate, MemberRead, MemberUpdate
+from library_api.lending.domain.entities import Loan
+from library_api.lending.service_layer.services import MemberService
 
 router = APIRouter()
 
 members_router = APIRouter(prefix="/members", tags=["members"])
 loans_router = APIRouter(prefix="/loans", tags=["loans"])
+
+
+async def _to_loan_read(loan: Loan, book_service: BookService, member_service: MemberService) -> LoanRead:
+    book = await book_service.get(loan.book_id)
+    member = await member_service.get(loan.member_id)
+    return LoanRead(
+        id=loan.id,
+        book_id=loan.book_id,
+        book_title=book.title,
+        member_id=loan.member_id,
+        member_name=member.name,
+        loaned_at=loan.loaned_at,
+        due_at=loan.due_at,
+        returned_at=loan.returned_at,
+    )
 
 
 @members_router.post("", response_model=MemberRead, status_code=status.HTTP_201_CREATED)
@@ -35,23 +53,39 @@ async def delete_member(member_id: int, service: MemberServiceDep) -> None:
 
 
 @loans_router.post("", response_model=LoanRead, status_code=status.HTTP_201_CREATED)
-async def create_loan(data: LoanCreate, service: LoanServiceDep) -> LoanRead:
-    return await service.loan_book(book_id=data.book_id, member_id=data.member_id)
+async def create_loan(
+    data: LoanCreate, service: LoanServiceDep, book_service: BookServiceDep, member_service: MemberServiceDep
+) -> LoanRead:
+    loan = await service.loan_book(book_id=data.book_id, member_id=data.member_id)
+    return await _to_loan_read(loan, book_service, member_service)
 
 
 @loans_router.post("/{loan_id}/return", response_model=LoanRead)
-async def return_loan(loan_id: int, service: LoanServiceDep) -> LoanRead:
-    return await service.return_book(loan_id)
+async def return_loan(
+    loan_id: int, service: LoanServiceDep, book_service: BookServiceDep, member_service: MemberServiceDep
+) -> LoanRead:
+    loan = await service.return_book(loan_id)
+    return await _to_loan_read(loan, book_service, member_service)
 
 
 @loans_router.get("", response_model=list[LoanRead])
-async def list_loans(service: LoanServiceDep, offset: int = 0, limit: int = 100) -> list[LoanRead]:
-    return list(await service.list(offset=offset, limit=limit))
+async def list_loans(
+    service: LoanServiceDep,
+    book_service: BookServiceDep,
+    member_service: MemberServiceDep,
+    offset: int = 0,
+    limit: int = 100,
+) -> list[LoanRead]:
+    loans = await service.list(offset=offset, limit=limit)
+    return [await _to_loan_read(loan, book_service, member_service) for loan in loans]
 
 
 @loans_router.get("/{loan_id}", response_model=LoanRead)
-async def get_loan(loan_id: int, service: LoanServiceDep) -> LoanRead:
-    return await service.get(loan_id)
+async def get_loan(
+    loan_id: int, service: LoanServiceDep, book_service: BookServiceDep, member_service: MemberServiceDep
+) -> LoanRead:
+    loan = await service.get(loan_id)
+    return await _to_loan_read(loan, book_service, member_service)
 
 
 router.include_router(members_router)

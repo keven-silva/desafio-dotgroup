@@ -2,11 +2,27 @@ from fastapi import APIRouter, status
 
 from library_api.catalog.api.deps import AuthorServiceDep, BookServiceDep
 from library_api.catalog.api.schemas import AuthorCreate, AuthorRead, AuthorUpdate, BookCreate, BookRead, BookUpdate
+from library_api.catalog.domain.entities import Book
+from library_api.catalog.service_layer.services import AuthorService
 
 router = APIRouter()
 
 authors_router = APIRouter(prefix="/authors", tags=["authors"])
 books_router = APIRouter(prefix="/books", tags=["books"])
+
+
+async def _to_book_read(book: Book, author_service: AuthorService) -> BookRead:
+    author = await author_service.get(book.author_id)
+    return BookRead(
+        id=book.id,
+        title=book.title,
+        isbn=book.isbn,
+        category=book.category,
+        author_id=book.author_id,
+        author_name=author.name,
+        total_copies=book.total_copies,
+        available_copies=book.available_copies,
+    )
 
 
 @authors_router.post("", response_model=AuthorRead, status_code=status.HTTP_201_CREATED)
@@ -35,31 +51,39 @@ async def delete_author(author_id: int, service: AuthorServiceDep) -> None:
 
 
 @books_router.post("", response_model=BookRead, status_code=status.HTTP_201_CREATED)
-async def create_book(data: BookCreate, service: BookServiceDep) -> BookRead:
-    return await service.create(
+async def create_book(data: BookCreate, service: BookServiceDep, author_service: AuthorServiceDep) -> BookRead:
+    book = await service.create(
         title=data.title,
         isbn=data.isbn,
         category=data.category,
         author_id=data.author_id,
         total_copies=data.total_copies,
     )
+    return await _to_book_read(book, author_service)
 
 
 @books_router.get("", response_model=list[BookRead])
-async def list_books(service: BookServiceDep, offset: int = 0, limit: int = 100) -> list[BookRead]:
-    return list(await service.list(offset=offset, limit=limit))
+async def list_books(
+    service: BookServiceDep, author_service: AuthorServiceDep, offset: int = 0, limit: int = 100
+) -> list[BookRead]:
+    books = await service.list(offset=offset, limit=limit)
+    return [await _to_book_read(book, author_service) for book in books]
 
 
 @books_router.get("/{book_id}", response_model=BookRead)
-async def get_book(book_id: int, service: BookServiceDep) -> BookRead:
-    return await service.get(book_id)
+async def get_book(book_id: int, service: BookServiceDep, author_service: AuthorServiceDep) -> BookRead:
+    book = await service.get(book_id)
+    return await _to_book_read(book, author_service)
 
 
 @books_router.patch("/{book_id}", response_model=BookRead)
-async def update_book(book_id: int, data: BookUpdate, service: BookServiceDep) -> BookRead:
-    return await service.update(
+async def update_book(
+    book_id: int, data: BookUpdate, service: BookServiceDep, author_service: AuthorServiceDep
+) -> BookRead:
+    book = await service.update(
         book_id, title=data.title, category=data.category, total_copies=data.total_copies
     )
+    return await _to_book_read(book, author_service)
 
 
 @books_router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)

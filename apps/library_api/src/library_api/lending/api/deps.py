@@ -4,6 +4,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from library_api.catalog.adapters.repositories import SqlAlchemyBookRepository
+from library_api.catalog.service_layer.services import BookService
 from library_api.lending.adapters.repositories import SqlAlchemyLoanRepository, SqlAlchemyMemberRepository
 from library_api.lending.service_layer.services import LoanService, MemberService
 from library_api.shared.config import Settings, get_settings
@@ -15,6 +16,12 @@ AppSettings = Annotated[Settings, Depends(get_settings)]
 
 def get_member_service(session: DbSession) -> MemberService:
     return MemberService(SqlAlchemyMemberRepository(session))
+
+
+def get_book_service(session: DbSession) -> BookService:
+    # reaproveitado aqui só para enriquecer LoanRead com o título do livro (leitura) —
+    # mesmo racional de composition-root já usado em `get_loan_service` abaixo.
+    return BookService(SqlAlchemyBookRepository(session))
 
 
 def get_loan_service(session: DbSession, settings: AppSettings) -> LoanService:
@@ -30,3 +37,4 @@ def get_loan_service(session: DbSession, settings: AppSettings) -> LoanService:
 
 MemberServiceDep = Annotated[MemberService, Depends(get_member_service)]
 LoanServiceDep = Annotated[LoanService, Depends(get_loan_service)]
+BookServiceDep = Annotated[BookService, Depends(get_book_service)]

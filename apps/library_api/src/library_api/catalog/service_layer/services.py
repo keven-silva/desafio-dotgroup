@@ -10,6 +10,8 @@ class AuthorService:
         self._repository = repository
 
     async def create(self, *, name: str, bio: str | None = None) -> Author:
+        if await self._repository.get_by_name(name) is not None:
+            raise ConflictError(f"Já existe um autor com o nome '{name}'")
         return await self._repository.add(Author(name=name, bio=bio))
 
     async def get(self, author_id: int) -> Author:
@@ -23,7 +25,10 @@ class AuthorService:
 
     async def update(self, author_id: int, *, name: str | None = None, bio: str | None = None) -> Author:
         author = await self.get(author_id)
-        if name is not None:
+        if name is not None and name.lower() != author.name.lower():
+            existing = await self._repository.get_by_name(name)
+            if existing is not None and existing.id != author_id:
+                raise ConflictError(f"Já existe um autor com o nome '{name}'")
             author.name = name
         if bio is not None:
             author.bio = bio

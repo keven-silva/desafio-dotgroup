@@ -27,7 +27,10 @@ async def test_loan_and_return_flow(client: AsyncClient) -> None:
 
     loan_response = await client.post("/api/v1/loans", json={"book_id": book_id, "member_id": member_id})
     assert loan_response.status_code == 201
-    loan_id = loan_response.json()["id"]
+    loan_body = loan_response.json()
+    assert loan_body["book_title"] == "Livro Teste"
+    assert loan_body["member_name"] == "Fulano"
+    loan_id = loan_body["id"]
 
     book_after_loan = await client.get(f"/api/v1/books/{book_id}")
     assert book_after_loan.json()["available_copies"] == 0

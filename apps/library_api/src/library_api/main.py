@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from observability import StructlogRequestMiddleware, configure_logging, get_logger
 
 from library_api.catalog.api.routers import router as catalog_router
@@ -32,6 +33,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_middleware(StructlogRequestMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_allowed_origins_list,
+    # sem credentials (API stateless, sem cookies/sessão) — permite manter "*" com segurança
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 register_exception_handlers(app)
 
 api_router = APIRouter(prefix="/api/v1")

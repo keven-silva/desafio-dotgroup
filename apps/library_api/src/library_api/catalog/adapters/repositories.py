@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from library_api.catalog.adapters.orm import AuthorModel, BookModel
@@ -47,6 +47,13 @@ class SqlAlchemyAuthorRepository:
 
     async def get(self, id_: int) -> Author | None:
         model = await self._session.get(AuthorModel, id_)
+        return _author_to_entity(model) if model else None
+
+    async def get_by_name(self, name: str) -> Author | None:
+        result = await self._session.execute(
+            select(AuthorModel).where(func.lower(AuthorModel.name) == name.lower())
+        )
+        model = result.scalars().first()
         return _author_to_entity(model) if model else None
 
     async def list(self, *, offset: int = 0, limit: int = 100) -> Sequence[Author]:
