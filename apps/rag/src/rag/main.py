@@ -8,7 +8,13 @@ settings = get_settings()
 configure_logging("rag", level=settings.log_level, json=settings.log_json)
 logger = get_logger()
 
-app = FastAPI(title="RAG Service", version="0.1.0")
+app = FastAPI(
+    title="RAG Service",
+    version="0.1.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+)
 app.add_middleware(StructlogRequestMiddleware)
 app.include_router(router)
 

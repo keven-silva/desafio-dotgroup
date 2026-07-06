@@ -21,7 +21,7 @@ dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "pytest-mock>=3.14"]
 chatbot = "chatbot.cli:main"
 
 [tool.uv.sources]
-observability = { workspace = true }
+observability = { path = "../../libs/observability", editable = true }
 
 [build-system]
 requires = ["hatchling"]
