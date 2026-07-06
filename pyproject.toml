@@ -1,0 +1,18 @@
+[project]
+name = "desafio-dotgroup"
+version = "0.1.0"
+description = "Projeto com API de biblioteca, chatbot Python e vector store"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "alembic>=1.16.0",
+    "fastapi>=0.116.0",
+    "pydantic-settings>=2.10.0",
+    "psycopg[binary]>=3.2.0",
+    "sqlalchemy>=2.0.0",
+    "uvicorn>=0.35.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
