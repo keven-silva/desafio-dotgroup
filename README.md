@@ -1,19 +1,20 @@
 # desafio-dotgroup
 
-Três serviços independentes, organizados em DDD (bounded contexts), num monorepo gerenciado
-com `uv workspace`:
+Três serviços **totalmente independentes** (cada um com seu próprio `pyproject.toml`,
+`uv.lock` e `.venv`), organizados internamente em DDD (bounded contexts):
 
-| Serviço | O que faz | Stack |
-|---|---|---|
-| [`library_api`](apps/library_api) | API REST de biblioteca (autores, livros, membros, empréstimos) | FastAPI + SQLAlchemy (async) + PostgreSQL + Alembic |
-| [`rag`](apps/rag) | Ingestão de artigos/posts, geração de embeddings e busca semântica | FastAPI + `sentence-transformers`/OpenAI + FAISS |
-| [`chatbot`](apps/chatbot) | Chatbot de IA sobre desenvolvimento Python, com contexto do `rag` (RAG) | FastAPI + LangChain (LCEL) + OpenAI |
+| Serviço | O que faz | Stack | Porta sugerida |
+|---|---|---|---|
+| [`library_api`](apps/library_api) | API REST de biblioteca (autores, livros, membros, empréstimos) | FastAPI + SQLAlchemy (async) + PostgreSQL + Alembic | 8000 |
+| [`rag`](apps/rag) | Ingestão de artigos/posts, geração de embeddings e busca semântica | FastAPI + `sentence-transformers`/OpenAI + FAISS | 8001 |
+| [`chatbot`](apps/chatbot) | Chatbot de IA sobre desenvolvimento Python, com contexto do `rag` (RAG) | FastAPI + LangChain (LCEL) + OpenAI | 8002 |
 
-Cada serviço é isolado de verdade: tem seu próprio `pyproject.toml`, suas próprias
-configurações (`.env`), e não importa código de negócio de outro serviço — a única
-comunicação entre eles é via HTTP (o `chatbot` chama a API do `rag`). A única dependência
-compartilhada é [`libs/observability`](libs/observability), que é infraestrutura transversal
-(logging estruturado), não lógica de domínio.
+Nenhum serviço importa código de negócio de outro — a única comunicação entre eles é via HTTP
+(o `chatbot` chama a API do `rag`, best-effort). A única coisa compartilhada é
+[`libs/observability`](libs/observability) (logging estruturado), referenciada por cada app como
+dependência de path (`../../libs/observability`), não por um workspace comum — não existe
+`pyproject.toml` na raiz do repo; cada `apps/*` é instalado/rodado/testado de dentro da sua
+própria pasta.
 
 ## Arquitetura
 
@@ -33,53 +34,69 @@ A `library_api` tem dois subdomínios (bounded contexts) claros dentro do mesmo 
 
 ## Pré-requisitos
 
-- [`uv`](https://docs.astral.sh/uv/) (gerencia o workspace Python)
+- [`uv`](https://docs.astral.sh/uv/) (gerencia cada projeto Python individualmente)
 - Docker + Docker Compose (Postgres da `library_api`)
-- Uma OpenAI API key (só necessária para o `chatbot` responder de verdade)
+- Uma OpenAI API key (só necessária para o `chatbot` responder de verdade, ou para o `rag` se
+  `EMBEDDING_PROVIDER=openai`)
 
 ## Setup
 
-```bash
-cp .env.example .env   # ajuste OPENAI_API_KEY e o resto se necessário
-uv sync --all-packages  # instala as dependências de todos os serviços num único .venv
+Não há um passo de setup único: cada serviço é instalado separadamente, de dentro da sua
+própria pasta. Veja o README de cada um para o passo a passo completo:
 
+- [apps/library_api/README.md](apps/library_api/README.md)
+- [apps/rag/README.md](apps/rag/README.md)
+- [apps/chatbot/README.md](apps/chatbot/README.md)
+
+Resumo rápido (repita para os 3 apps):
+
+```bash
+cd apps/<servico>
+uv sync
+cp .env.example .env   # cada app tem seu próprio .env.example, só com o que ele precisa
+```
+
+## Subindo tudo junto
+
+```bash
+# 1) Postgres (necessário só para library_api)
 docker compose up -d postgres
-uv run --package library-api alembic upgrade head
+
+# 2) library_api — terminal 1
+cd apps/library_api && uv run alembic upgrade head && uv run uvicorn library_api.main:app --reload --port 8000
+
+# 3) rag — terminal 2
+cd apps/rag && uv run rag ingest && uv run uvicorn rag.main:app --reload --port 8001
+
+# 4) chatbot — terminal 3 (precisa do rag rodando para ter contexto RAG)
+cd apps/chatbot && RAG_API_URL=http://localhost:8001 uv run uvicorn chatbot.main:app --reload --port 8002
 ```
 
-## Rodando cada serviço
+Docs interativas (Swagger) de cada serviço: `http://localhost:8000/api/docs`,
+`http://localhost:8001/api/docs`, `http://localhost:8002/api/docs`.
+
+Também é possível interagir com a busca semântica e com o chatbot direto pelo terminal, sem
+subir a API HTTP:
 
 ```bash
-# API de biblioteca — http://localhost:8000/docs
-uv run --package library-api uvicorn library_api.main:app --reload --port 8000
-
-# Serviço de embeddings/busca semântica — http://localhost:8001/docs
-uv run --package rag rag ingest                      # popula o índice FAISS a partir de apps/rag/data/raw
-uv run --package rag uvicorn rag.main:app --reload --port 8001
-
-# Chatbot — http://localhost:8002/docs (precisa do `rag` rodando para ter contexto RAG)
-RAG_API_URL=http://localhost:8001 uv run --package chatbot uvicorn chatbot.main:app --reload --port 8002
-```
-
-Também é possível interagir com a busca semântica e com o chatbot direto pelo terminal:
-
-```bash
-uv run --package rag rag search "como funciona async/await em python?" --k 3
-uv run --package chatbot chatbot
+cd apps/rag && uv run rag search "como funciona async/await em python?" --k 3
+cd apps/chatbot && uv run chatbot
 ```
 
 ## Variáveis de ambiente
 
-Veja `.env.example` na raiz para a lista completa. Principais:
+Cada serviço tem seu próprio `.env.example`, isolado com só o que ele precisa — não existe
+mais um `.env` único compartilhado por todos:
 
-| Variável | Serviço | Descrição |
+| `.env.example` | Variáveis | Uso |
 |---|---|---|
-| `DATABASE_URL` | `library_api` | conexão Postgres (async, driver `asyncpg`) |
-| `EMBEDDING_PROVIDER` | `rag` | `sentence-transformers` (local, padrão) ou `openai` |
-| `EMBEDDING_MODEL` | `rag` | modelo usado pela estratégia ativa (Strategy Pattern) |
-| `RAG_API_URL` | `chatbot` | URL onde o serviço `rag` está rodando |
-| `OPENAI_API_KEY` | `chatbot` (e `rag` se `EMBEDDING_PROVIDER=openai`) | chave da API da OpenAI |
-| `LOG_LEVEL` / `LOG_JSON` | todos | nível de log e se a saída é JSON estruturado |
+| [`.env.example`](.env.example) (raiz) | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT` | só o `docker-compose.yml` (Postgres) |
+| [`apps/library_api/.env.example`](apps/library_api/.env.example) | `DATABASE_URL`, `DEFAULT_LOAN_PERIOD_DAYS`, `CORS_ALLOWED_ORIGINS`, `LOG_LEVEL`, `LOG_JSON` | API de biblioteca |
+| [`apps/rag/.env.example`](apps/rag/.env.example) | `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `OPENAI_API_KEY` (se `EMBEDDING_PROVIDER=openai`), `RAG_DATA_DIR`, `RAG_INDEX_DIR`, `CHUNK_SIZE`, `CHUNK_OVERLAP`, `LOG_LEVEL`, `LOG_JSON` | embeddings/busca semântica |
+| [`apps/chatbot/.env.example`](apps/chatbot/.env.example) | `OPENAI_API_KEY`, `CHATBOT_MODEL`, `RAG_API_URL`, `RAG_CONTEXT_K`, `LOG_LEVEL`, `LOG_JSON` | chatbot |
+
+`DATABASE_URL` (library_api) precisa bater com as credenciais definidas no `.env` da raiz para
+o `docker compose up -d postgres` (usuário/senha/porta/nome do banco).
 
 ## Logs estruturados
 
@@ -94,12 +111,10 @@ domínio relevantes (ex: `loan.created`, `rag.search.completed`, `chatbot.answer
 ## Testes
 
 ```bash
-# rodados a partir da raiz do repo — o caminho no final garante que o pytest use
-# o pyproject.toml (e config de asyncio) daquele app, não o da raiz do workspace
-uv run --package library-api pytest apps/library_api
-uv run --package rag pytest apps/rag
-uv run --package chatbot pytest apps/chatbot
-uv run --package observability pytest libs/observability
+cd apps/library_api && uv run pytest
+cd apps/rag && uv run pytest
+cd apps/chatbot && uv run pytest
+cd libs/observability && uv run pytest
 ```
 
 Testes unitários não tocam rede/infra externa (mockam OpenAI, chamadas HTTP entre serviços

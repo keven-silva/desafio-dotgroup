@@ -31,10 +31,10 @@ data/raw/*.md,*.txt  ──►  load_documents()  ──►  chunk_documents()  
    retornando os `k` chunks mais similares com seus scores.
 
 Todo esse pipeline é exposto de duas formas equivalentes (mesmo `service_layer`, duas portas
-de entrada):
-- **CLI**: `uv run --package rag rag ingest` e `uv run --package rag rag search "pergunta" --k 3`.
+de entrada), rodadas de dentro de `apps/rag` (`cd apps/rag`):
+- **CLI**: `uv run rag ingest` e `uv run rag search "pergunta" --k 3`.
 - **API HTTP**: `POST /ingest` e `POST /search {"query": "...", "k": 3}` (serviço roda em
-  `uv run --package rag uvicorn rag.main:app --port 8001`).
+  `uv run uvicorn rag.main:app --port 8001`, docs em `http://localhost:8001/api/docs`).
 
 ## Escolha do modelo de embedding
 
@@ -90,9 +90,9 @@ das queries repete o título do artigo palavra por palavra).
 ## Reproduzindo os exemplos
 
 ```bash
-cd desafio-dotgroup
-uv run --package rag rag ingest
-uv run --package rag rag search "como funciona programação assíncrona em python?" --k 2
-uv run --package rag rag search "como o FastAPI resolve dependências entre camadas?" --k 1
-uv run --package rag rag search "como isolar dependências de um projeto Python?" --k 1
+cd apps/rag
+uv run rag ingest
+uv run rag search "como funciona programação assíncrona em python?" --k 2
+uv run rag search "como o FastAPI resolve dependências entre camadas?" --k 1
+uv run rag search "como isolar dependências de um projeto Python?" --k 1
 ```
